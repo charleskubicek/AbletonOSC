@@ -76,7 +76,9 @@ class Manager(ControlSurface):
                 abletonosc.ClipSlotHandler(self),
                 abletonosc.TrackHandler(self),
                 abletonosc.DeviceHandler(self),
-                abletonosc.ViewHandler(self)
+                abletonosc.ViewHandler(self),
+                abletonosc.CustomHandler(self),
+                abletonosc.DeviceNavHandler(self)
             ]
 
     def clear_api(self):
@@ -93,7 +95,7 @@ class Manager(ControlSurface):
         """
         logger.debug("Tick...")
         self.osc_server.process()
-        self.schedule_message(1, self.tick)
+        self.schedule_message(0.5, self.tick)
 
     def reload_imports(self):
         try:
@@ -106,8 +108,10 @@ class Manager(ControlSurface):
             importlib.reload(abletonosc.song)
             importlib.reload(abletonosc.track)
             importlib.reload(abletonosc.view)
+            importlib.reload(abletonosc.custom)
             importlib.reload(abletonosc)
         except Exception as e:
+            logger.warning(e)
             exc = traceback.format_exc()
             logging.warning(exc)
 

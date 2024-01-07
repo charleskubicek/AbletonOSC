@@ -10,5 +10,7 @@ from .clip import ClipHandler
 from .clip_slot import ClipSlotHandler
 from .track import TrackHandler
 from .device import DeviceHandler
+from .device_nav import DeviceNavHandler
+from .custom import CustomHandler
 from .view import ViewHandler
 from .constants import OSC_LISTEN_PORT, OSC_RESPONSE_PORT
