@@ -14,9 +14,9 @@ class ClipSlotHandler(AbletonOSCHandler):
                 clip_slot = track.clip_slots[clip_index]
 
                 if pass_clip_index:
-                    rv = func((track_index, clip_index), *args, params[2:])
+                    rv = func(clip_slot, *args, tuple(params[0:]))
                 else:
-                    rv = func(clip_slot, *args, params[2:])
+                    rv = func(clip_slot, *args, tuple(params[2:]))
 
                 self.logger.info(track_index, clip_index, rv)
                 if rv is not None:
@@ -57,3 +57,11 @@ class ClipSlotHandler(AbletonOSCHandler):
         for prop in properties_rw:
             self.osc_server.add_handler("/live/clip_slot/set/%s" % prop,
                                         create_clip_slot_callback(self._set_property, prop))
+
+        def duplicate_clip_slot(clip_slot, args):
+            target_track_index, target_clip_index = tuple(args)
+            track = self.song.tracks[target_track_index]
+            target_clip_slot = track.clip_slots[target_clip_index]
+            clip_slot.duplicate_clip_to(target_clip_slot)
+
+        self.osc_server.add_handler("/live/clip_slot/duplicate_clip_to", create_clip_slot_callback(duplicate_clip_slot))

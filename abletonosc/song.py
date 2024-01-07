@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import Live
 import json
@@ -68,12 +69,13 @@ class SongHandler(AbletonOSCHandler):
         ]
 
         #--------------------------------------------------------------------------------
-        # Callbacks for Song: properties (read-only)
+        # Callbacks for Songi: properties (read-only)
         #--------------------------------------------------------------------------------
         properties_r = [
             "can_redo",
             "can_undo",
-            "is_playing"
+            "is_playing",
+            "song_length",
         ]
 
         for prop in properties_r + properties_rw:
@@ -113,6 +115,8 @@ class SongHandler(AbletonOSCHandler):
              track_1_name, clip_1_0_name,   clip_1_1_name,   ... clip_1_7_name, ...]
             """
             track_index_min, track_index_max, *properties = params
+            track_index_min = int(track_index_min)
+            track_index_max = int(track_index_max)
             self.logger.info("Getting track data: %s (tracks %d..%d)" %
                              (properties, track_index_min, track_index_max))
             if track_index_max == -1:
@@ -139,6 +143,9 @@ class SongHandler(AbletonOSCHandler):
                                 rv.append(getattr(clip_slot.clip, property_name))
                             else:
                                 rv.append(None)
+                    elif obj == "clip_slot":
+                        for clip_slot in track.clip_slots:
+                            rv.append(getattr(clip_slot, property_name))
                     elif obj == "device":
                         for device in track.devices:
                             rv.append(getattr(device, property_name))
@@ -193,6 +200,13 @@ class SongHandler(AbletonOSCHandler):
                 "tracks": tracks
             }
 
+            if sys.platform == "darwin":
+                #--------------------------------------------------------------------------------
+                # On macOS, TMPDIR by default points to a process-specific directory.
+                # We want to use a global temp dir (typically, tmp) so that other processes
+                # know where to find this output .json, so unset TMPDIR.
+                #--------------------------------------------------------------------------------
+                os.environ["TMPDIR"] = ""
             fd = open(os.path.join(tempfile.gettempdir(), "abletonosc-song-structure.json"), "w")
             json.dump(song, fd)
             fd.close()
@@ -233,19 +247,37 @@ class SongHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/song/cue_point/jump", partial(song_jump_to_cue_point, self.song))
 
         #--------------------------------------------------------------------------------
-        # Listener for /live/song/beat
+        # Listener for /live/song/get/beat
         #--------------------------------------------------------------------------------
         self.last_song_time = -1.0
-        self.song.add_current_song_time_listener(self.song_time_changed)
+        
+        def stop_beat_listener(params: Tuple[Any] = ()):
+            try:
+                self.song.remove_current_song_time_listener(self.current_song_time_changed)
+                self.logger.info("Removing beat listener")
+            except:
+                pass
 
-    def song_time_changed(self):
+        def start_beat_listener(params: Tuple[Any] = ()):
+            stop_beat_listener()
+            self.logger.info("Adding beat listener")
+            self.song.add_current_song_time_listener(self.current_song_time_changed)
+
+        self.osc_server.add_handler("/live/song/start_listen/beat", start_beat_listener)
+        self.osc_server.add_handler("/live/song/stop_listen/beat", stop_beat_listener)
+
+    def current_song_time_changed(self):
         #--------------------------------------------------------------------------------
         # If song has rewound or skipped to next beat, sent a /live/beat message
         #--------------------------------------------------------------------------------
         if (self.song.current_song_time < self.last_song_time) or \
                 (int(self.song.current_song_time) > int(self.last_song_time)):
-            self.osc_server.send("/live/song/beat", (int(self.song.current_song_time),))
+            self.osc_server.send("/live/song/get/beat", (int(self.song.current_song_time),))
         self.last_song_time = self.song.current_song_time
 
     def clear_api(self):
-        self.song.remove_current_song_time_listener(self.song_time_changed)
+        super().clear_api()
+        try:
+            self.song.remove_current_song_time_listener(self.current_song_time_changed)
+        except:
+            pass
