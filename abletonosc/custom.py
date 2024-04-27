@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Tuple, Any
 from .handler import AbletonOSCHandler
 
+
 class CustomHandler(AbletonOSCHandler):
     def __init__(self, manager):
         super().__init__(manager)
@@ -48,12 +49,12 @@ class CustomHandler(AbletonOSCHandler):
             while target_index < current_index and loop_check < 100:
                 _scroll_selected_device_chain(NavDirection.left)
                 current_index = self.tuple_index(devices, selected)
-                loop_check +=1
+                loop_check += 1
 
             while target_index > current_index and loop_check < 100:
                 _scroll_selected_device_chain(NavDirection.right)
                 current_index = self.tuple_index(devices, selected)
-                loop_check +=1
+                loop_check += 1
 
         def _scroll_selected_device_chain(direction):
             view = self.application.view
@@ -141,7 +142,7 @@ class CustomHandler(AbletonOSCHandler):
 
         def selected_device_ob(params):
             d = selected_device()
-            return (d.name,d.class_display_name,d.type,)
+            return (d.name, d.class_display_name, d.type,)
 
         def selected_device():
             return self.song.view.selected_track.view.selected_device
@@ -150,6 +151,16 @@ class CustomHandler(AbletonOSCHandler):
             current_index = self.song.view.selected_track.color_index
             self.song.view.selected_track.color_index = params[0]
             return (current_index,)
+
+        def toggle_ref_track(params):
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    if t.solo:
+                        t.solo = False
+                        t.mute = True
+                    else:
+                        t.solo = True
+                        t.mute = False
 
         def is_selected_device_an_instrument():
             return str(selected_device().type) == "instrument"
@@ -180,13 +191,13 @@ class CustomHandler(AbletonOSCHandler):
 
             count_check = 0
 
-            while selected_idx < target_idx and count_check<50:
+            while selected_idx < target_idx and count_check < 50:
                 device_nav_right_ignoring_inner_devices(None)
                 selected = selected_device()
                 selected_idx = tuple_index(devices, selected)
                 count_check += 1
 
-            while selected_idx > target_idx and count_check<50:
+            while selected_idx > target_idx and count_check < 50:
                 device_nav_left_ignoring_inner_devices(None)
                 selected = selected_device()
                 selected_idx = tuple_index(devices, selected)
@@ -194,7 +205,8 @@ class CustomHandler(AbletonOSCHandler):
 
         def find_instrument(track):
             for device in track.devices:
-                logger.info(f"type of {device.class_name} is {device.type} ({type(device.type)}, is inst: {device.type == 'instrument'})")
+                logger.info(
+                    f"type of {device.class_name} is {device.type} ({type(device.type)}, is inst: {device.type == 'instrument'})")
                 if str(device.type) == "instrument":
                     return device
 
@@ -224,7 +236,6 @@ class CustomHandler(AbletonOSCHandler):
                     logger.info(f"toggle_device_called_DT990_PRO_on_master, new val {d.parameters[0].value}")
                     self.manager.show_message(f"Sonaworks DT 990 set to {d.parameters[0].value}")
 
-
         def toggle_mono_on_master(params):
 
             for d in self.song.master_track.devices:
@@ -232,7 +243,6 @@ class CustomHandler(AbletonOSCHandler):
                     d.parameters[0].value = (d.parameters[0].value + 1) % 2
 
                     self.manager.show_message(f"Mono set to {d.parameters[0].value}")
-
 
         def toggle_high_pass_on_master(params):
 
@@ -242,7 +252,6 @@ class CustomHandler(AbletonOSCHandler):
 
                     self.manager.show_message(f"No Bass set to {d.parameters[0].value}")
 
-
         def toggle_low_pass_on_master(params):
 
             for d in self.song.master_track.devices:
@@ -250,7 +259,6 @@ class CustomHandler(AbletonOSCHandler):
                     d.parameters[0].value = (d.parameters[0].value + 1) % 2
 
                     self.manager.show_message(f"Bass Only set to {d.parameters[0].value}")
-
 
         def set_bass_only_master_device(params):
             val = params[0]
@@ -260,7 +268,6 @@ class CustomHandler(AbletonOSCHandler):
                     d.parameters[0].value = int(val)
 
                     self.manager.show_message(f"Bass Only set to {d.parameters[0].value}")
-
 
         def toggle_metric_ab_on_master(params):
 
@@ -276,7 +283,6 @@ class CustomHandler(AbletonOSCHandler):
 
                     logger.info(f"toggle metirc ab, new val {d.parameters[1].value}")
                     self.manager.show_message(f"Metric AB set to {d.parameters[1].value}")
-
 
         def tuple_index(tuple, obj):
             for i in range(0, len(tuple)):
@@ -299,19 +305,16 @@ class CustomHandler(AbletonOSCHandler):
             if next_index < all_tracks:
                 self.song.view.selected_track = self.song.tracks[next_index]
 
-
         def track_nav_dec(param):
             selected_track = self.song.view.selected_track  # Get the currently selected track
 
             if selected_track.name == "Master":
-                next_index = len(list(self.song.tracks)) -1
+                next_index = len(list(self.song.tracks)) - 1
             else:
                 next_index = list(self.song.tracks).index(selected_track) - 1  # Get the index of the selected track
 
             if next_index >= 0:
                 self.song.view.selected_track = self.song.tracks[next_index]
-
-
 
         def _scroll_device_chain(direction):
             view = self.application.view
@@ -321,7 +324,11 @@ class CustomHandler(AbletonOSCHandler):
             else:
                 view.scroll_view(direction, 'Detail/DeviceChain', False)
 
+        def fire_scene(params):
+            logger.info(f"fire_scene, params {params}")
+            self.song.scenes[params[0]].fire()
 
+        self.osc_server.add_handler("/live/custom/fire/scene", fire_scene)
         self.osc_server.add_handler("/live/custom/set/toggle_inst_utility", toggle_instrument_utility)
         self.osc_server.add_handler("/live/custom/set/toggle_first_last", toggle_first_last_device)
         self.osc_server.add_handler("/live/custom/nav/to_instrument", navigate_to_instrument)
@@ -338,6 +345,7 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/custom/toggle_dt990", toggle_device_called_DT990_PRO_on_master)
         self.osc_server.add_handler("/live/custom/toggle_metric_ab", toggle_metric_ab_on_master)
         self.osc_server.add_handler("/live/custom/toggle_mono", toggle_mono_on_master)
+        self.osc_server.add_handler("/live/custom/toggle_ref_track", toggle_ref_track)
         self.osc_server.add_handler("/live/custom/toggle_low_pass", toggle_low_pass_on_master)
         self.osc_server.add_handler("/live/custom/toggle_high_pass", toggle_high_pass_on_master)
         self.osc_server.add_handler("/live/view/message", show_message)
