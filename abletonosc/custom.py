@@ -134,11 +134,18 @@ class CustomHandler(AbletonOSCHandler):
                 _scroll_selected_device_chain(NavDirection.right)
                 check += 1
 
+        def replace_spaces(st):
+            return st.replace(" ", "_")
+
         def selected_device_name(params):
-            return (selected_device().name,)
+            device = selected_device()
+            logger.info(f"selected_device_name dev = {device}")
+            logger.info(f"selected_device_name dev = {device.name}")
+            logger.info(f"selected_device_name dev = {replace_spaces(device.name)}")
+            return (replace_spaces(device.name),)
 
         def selected_device_type(params):
-            return (selected_device().class_display_name,)
+            return (replace_spaces(selected_device().class_display_name),)
 
         def selected_device_ob(params):
             d = selected_device()
@@ -152,15 +159,6 @@ class CustomHandler(AbletonOSCHandler):
             self.song.view.selected_track.color_index = params[0]
             return (current_index,)
 
-        def toggle_ref_track(params):
-            for t in self.song.tracks:
-                if t.name.endswith('Ref') or t.name.endswith('Ref'):
-                    if t.solo:
-                        t.solo = False
-                        t.mute = True
-                    else:
-                        t.solo = True
-                        t.mute = False
 
         def is_selected_device_an_instrument():
             return str(selected_device().type) == "instrument"
@@ -219,12 +217,177 @@ class CustomHandler(AbletonOSCHandler):
                 return
 
         def show_message(params):
+            # self.log_message(f"show_message")
+            # self.manager.show_message(f"TEST")
             self.manager.show_message(f"{params[0]}")
+            # self.manager.show_message(f"TEST")
+            return (1, 1)
 
         def is_in_arrangement(params):
             vw = self.application.view.focused_document_view
 
             return tuple([vw == 'Arranger'])
+
+        def master_device_DT990_PRO_status(params):
+            for d in self.song.master_track.devices:
+                if 'DT990 PRO' in d.name:
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_DT990_PRO_turn_on(params):
+            for d in self.song.master_track.devices:
+                if 'DT990 PRO' in d.name:
+                    d.parameters[0].value = 1
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_DT990_PRO_turn_off(params):
+            for d in self.song.master_track.devices:
+                if 'DT990 PRO' in d.name:
+                    d.parameters[0].value = 0
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_ADAM_status(params):
+            for d in self.song.master_track.devices:
+                if 'ADAM' in d.name:
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_ADAM_turn_on(params):
+            for d in self.song.master_track.devices:
+                if 'ADAM' in d.name:
+                    d.parameters[0].value = 1
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_ADAM_turn_off(params):
+            for d in self.song.master_track.devices:
+                if 'ADAM' in d.name:
+                    d.parameters[0].value = 0
+                    return d.parameters[0].value,
+
+            return None
+
+        def master_device_ref_track_status(params):
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    if t.solo:
+                        return 1.0,
+
+            return 0.0,
+
+        def master_device_ref_track_on(params):
+            found = False
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    found = True
+                    break
+
+            if not found:
+                return 0.0,
+
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    t.solo = True
+                    t.mute = False
+                else:
+                    t.mute = True
+
+            return 1.0,
+
+
+        def master_device_ref_track_off(params):
+            found = False
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    found = True
+                    break
+
+            if not found:
+                return 0.0,
+
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    t.solo = False
+                    t.mute = True
+                else:
+                    t.mute = False
+
+            return 0.0,
+
+        def toggle_ref_track(params):
+            for t in self.song.tracks:
+                if t.name.endswith('Ref') or t.name.endswith('Ref'):
+                    if t.solo:
+                        t.solo = False
+                        t.mute = True
+                    else:
+                        t.solo = True
+                        t.mute = False
+
+        def toggle_mono_on_master(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Mono":
+                    d.parameters[0].value = (d.parameters[0].value + 1) % 2
+
+                    self.manager.show_message(f"Mono set to {d.parameters[0].value}")
+
+
+        def master_device_bass_only_status(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Bass Only":
+                    return d.parameters[0].value,
+
+            return None
+
+
+        def master_device_bass_only_on(params):
+            return set_master_chanel_device_to("Bass Only", 1.0)
+
+            return 0.0,
+        def master_device_bass_only_off(params):
+            return set_master_chanel_device_to("Bass Only", 0.0)
+
+
+        def master_device_bass_cut_status(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Bass Cut":
+                    return d.parameters[0].value,
+
+            return None
+
+
+        def master_device_bass_cut_on(params):
+            return set_master_chanel_device_to("Bass Cut", 1.0)
+
+            return 0.0,
+        def master_device_bass_cut_off(params):
+            return set_master_chanel_device_to("Bass Cut", 0.0)
+
+
+        def master_device_mono_status(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Mono":
+                    return d.parameters[0].value,
+
+            return None
+        def master_device_mono_on(params):
+            return set_master_chanel_device_to("Mono", 1.0)
+
+            return 0.0,
+        def master_device_mono_off(params):
+            return set_master_chanel_device_to("Mono", 0.0)
+
+            return 0.0,
+        def set_master_chanel_device_to(name, value):
+            for d in self.song.master_track.devices:
+                if d.name == name:
+                    d.parameters[0].value = value
+                    return d.parameters[0].value,
+
+            return 0.0,
+
 
         def toggle_device_called_DT990_PRO_on_master(params):
 
@@ -327,6 +490,27 @@ class CustomHandler(AbletonOSCHandler):
         def fire_scene(params):
             logger.info(f"fire_scene, params {params}")
             self.song.scenes[params[0]].fire()
+            name_clips_to_scene_number_and_clip_length(params)
+
+        def name_clips_to_scene_number_and_clip_length(params):
+            for track in self.song.tracks:  # for each track
+                for clip_slot in track.clip_slots:  # for each clip slot
+                    ## find the scene number of the clip slot
+                    scene_number = next((i for i, scene in enumerate(self.song.scenes) if clip_slot in scene.clip_slots), None)
+
+                    if clip_slot.has_clip:
+                        clip = clip_slot.clip
+                        # if not clip.name.startswith(f"{scene_number}."):
+
+                        # get the loop start and end markers
+                        loop_start = clip.loop_start
+                        loop_end = clip.loop_end
+                        loop_length = int(loop_end - loop_start)
+                        # strip the first number and following space from teh track name
+                        name = track.name.split(maxsplit=1)[1]
+
+
+                        clip.name = f"{scene_number+1} {name} ({loop_length})"
 
         self.osc_server.add_handler("/live/custom/fire/scene", fire_scene)
         self.osc_server.add_handler("/live/custom/set/toggle_inst_utility", toggle_instrument_utility)
@@ -342,10 +526,35 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/view/nav/devices/next", device_nav_right_ignoring_inner_devices)
         self.osc_server.add_handler("/live/view/nav/tracks/inc", track_nav_inc)
         self.osc_server.add_handler("/live/view/nav/tracks/dec", track_nav_dec)
+
         self.osc_server.add_handler("/live/custom/toggle_dt990", toggle_device_called_DT990_PRO_on_master)
-        self.osc_server.add_handler("/live/custom/toggle_metric_ab", toggle_metric_ab_on_master)
-        self.osc_server.add_handler("/live/custom/toggle_mono", toggle_mono_on_master)
+        self.osc_server.add_handler("/live/custom/master_dt990/status", master_device_DT990_PRO_status)
+        self.osc_server.add_handler("/live/custom/master_dt990/on", master_device_DT990_PRO_turn_on)
+        self.osc_server.add_handler("/live/custom/master_dt990/off", master_device_DT990_PRO_turn_off)
+
+        self.osc_server.add_handler("/live/custom/master_adam/status", master_device_ADAM_status)
+        self.osc_server.add_handler("/live/custom/master_adam/on", master_device_ADAM_turn_on)
+        self.osc_server.add_handler("/live/custom/master_adam/off", master_device_ADAM_turn_off)
+
         self.osc_server.add_handler("/live/custom/toggle_ref_track", toggle_ref_track)
+        self.osc_server.add_handler("/live/custom/master_ref_track/status", master_device_ref_track_status)
+        self.osc_server.add_handler("/live/custom/master_ref_track/on", master_device_ref_track_on)
+        self.osc_server.add_handler("/live/custom/master_ref_track/off", master_device_ref_track_off)
+
+        self.osc_server.add_handler("/live/custom/master_mono/status", master_device_mono_status)
+        self.osc_server.add_handler("/live/custom/master_mono/on", master_device_mono_on)
+        self.osc_server.add_handler("/live/custom/master_mono/off", master_device_mono_off)
+
+        self.osc_server.add_handler("/live/custom/master_bass_only/status", master_device_bass_only_status)
+        self.osc_server.add_handler("/live/custom/master_bass_only/on", master_device_bass_only_on)
+        self.osc_server.add_handler("/live/custom/master_bass_only/off", master_device_bass_only_off)
+
+        self.osc_server.add_handler("/live/custom/master_bass_cut/status", master_device_bass_cut_status)
+        self.osc_server.add_handler("/live/custom/master_bass_cut/on", master_device_bass_cut_on)
+        self.osc_server.add_handler("/live/custom/master_bass_cut/off", master_device_bass_cut_off)
+
+        self.osc_server.add_handler("/live/custom/toggle_metric_ab", toggle_metric_ab_on_master)
+        # self.osc_server.add_handler("/live/custom/toggle_mono", toggle_mono_on_master)
         self.osc_server.add_handler("/live/custom/toggle_low_pass", toggle_low_pass_on_master)
         self.osc_server.add_handler("/live/custom/toggle_high_pass", toggle_high_pass_on_master)
         self.osc_server.add_handler("/live/view/message", show_message)
