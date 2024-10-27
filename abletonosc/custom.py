@@ -37,7 +37,7 @@ class CustomHandler(AbletonOSCHandler):
         def scroll_to_device(params):
             NavDirection = Live.Application.Application.View.NavDirection
 
-            target_index = params[0]
+            target_index = int(params[0])
 
             selected = self.selected_device()
             devices = self.song.view.selected_track.devices
@@ -156,7 +156,7 @@ class CustomHandler(AbletonOSCHandler):
 
         def track_color_to_red(params):
             current_index = self.song.view.selected_track.color_index
-            self.song.view.selected_track.color_index = params[0]
+            self.song.view.selected_track.color_index = int(params[0])
             return (current_index,)
 
 
@@ -424,11 +424,11 @@ class CustomHandler(AbletonOSCHandler):
                     self.manager.show_message(f"Bass Only set to {d.parameters[0].value}")
 
         def set_bass_only_master_device(params):
-            val = params[0]
+            val = int(params[0])
             for d in self.song.master_track.devices:
                 if d.name == "Bass Only":
                     # d.parameters[0].value = (d.parameters[0].value + 1) % 2
-                    d.parameters[0].value = int(val)
+                    d.parameters[0].value = val
 
                     self.manager.show_message(f"Bass Only set to {d.parameters[0].value}")
 
@@ -489,7 +489,8 @@ class CustomHandler(AbletonOSCHandler):
 
         def fire_scene(params):
             logger.info(f"fire_scene, params {params}")
-            self.song.scenes[params[0]].fire()
+            logger.info(f"fire_scene, params {self.song.scenes}")
+            self.song.scenes[int(params[0])].fire()
             name_clips_to_scene_number_and_clip_length(params)
 
         def name_clips_to_scene_number_and_clip_length(params):
@@ -507,10 +508,11 @@ class CustomHandler(AbletonOSCHandler):
                         loop_end = clip.loop_end
                         loop_length = int(loop_end - loop_start)
                         # strip the first number and following space from teh track name
-                        name = track.name.split(maxsplit=1)[1]
+                        parts = track.name.split(maxsplit=1)
 
-
-                        clip.name = f"{scene_number+1} {name} ({loop_length})"
+                        if len(parts) > 1:
+                            name = parts[1]
+                            clip.name = f"{scene_number+1} {name} ({loop_length})"
 
         self.osc_server.add_handler("/live/custom/fire/scene", fire_scene)
         self.osc_server.add_handler("/live/custom/set/toggle_inst_utility", toggle_instrument_utility)
