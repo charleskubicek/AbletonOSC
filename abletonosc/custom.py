@@ -4,9 +4,13 @@ from _Framework.ControlSurface import ControlSurface
 import Live
 import logging
 from typing import Optional, Tuple, Any
+
 from .handler import AbletonOSCHandler
 import time
 import re
+from functools import partial
+from ..pythonosc.udp_client import SimpleUDPClient
+from ..pythonosc.osc_message_builder import ArgValue
 
 class ClipOps(AbletonOSCHandler):
 
@@ -79,6 +83,25 @@ class ClipOps(AbletonOSCHandler):
             return clip
 
         return None
+
+    def shift_clip_notes_right(self):
+        clip = self.get_or_create_selected_clip(-1, create=False, remove_existing=False)
+        if clip is not None:
+            notes = clip.get_all_notes_extended()
+            for note in notes:
+                note.start_time = note.start_time + self._note_shift_quantization
+
+            clip.apply_note_modifications(notes)
+
+
+    def shift_clip_notes_left(self):
+        clip = self.get_or_create_selected_clip(-1, create=False, remove_existing=False)
+        if clip is not None:
+            notes = clip.get_all_notes_extended()
+            for note in notes:
+                note.start_time = note.start_time - self._note_shift_quantization
+
+            clip.apply_note_modifications(notes)
 
 
 class PatternCycler(AbletonOSCHandler):
@@ -154,6 +177,27 @@ class Patterns(object):
     ]
 
 
+class TouchOSCClient:
+
+    def __init__(self, host='127.0.0.1', port=5005):
+        self.client = SimpleUDPClient(host, port)
+        self.logger = logging.getLogger("touchosc")
+
+        self.logger.info(f"TouchOSCClient created with host {host} and port {port}")
+
+    def send_message(self, address: str, value: ArgValue) -> None:
+        # self.logger.info(f"Sending message {address} {value}")
+        self.client.send_message(address, value)
+
+class TouchOSCMultiClient:
+
+    def __init__(self, clients: list[TouchOSCClient]):
+        self.clients = clients
+
+    def send_message(self, address: str, value: ArgValue) -> None:
+        for client in self.clients:
+            client.send_message(address, value)
+
 class CustomHandler(AbletonOSCHandler):
     def __init__(self, manager):
         super().__init__(manager)
@@ -163,13 +207,120 @@ class CustomHandler(AbletonOSCHandler):
         self.midi_pattern_cycler = PatternCycler(self, Patterns.basic_midi_cycles, self.clip_ops)
 
         self.name_guesser = NameGuesser(self, self.song)
+        self.touch_osc = TouchOSCMultiClient([
+            # TouchOSCClient(host='127.0.0.1'),
+            # TouchOSCClient(host='192.168.68.84', port=5015)
+        ])
+
+        self.the_selected_device = None
 
     def log_message(self, message):
         self.logger.info(message)
 
+    def parameter_0_listener(self):
+        self.parameter_listener(0)
+    def parameter_1_listener(self):
+        self.parameter_listener(1)
+    def parameter_2_listener(self):
+        self.parameter_listener(2)
+    def parameter_3_listener(self):
+        self.parameter_listener(3)
+    def parameter_4_listener(self):
+        self.parameter_listener(4)
+    def parameter_5_listener(self):
+        self.parameter_listener(5)
+    def parameter_6_listener(self):
+        self.parameter_listener(6)
+    def parameter_7_listener(self):
+        self.parameter_listener(7)
+    def parameter_8_listener(self):
+        self.parameter_listener(8)
+    def parameter_9_listener(self):
+        self.parameter_listener(9)
+    def parameter_10_listener(self):
+        self.parameter_listener(10)
+    def parameter_11_listener(self):
+        self.parameter_listener(11)
+    def parameter_12_listener(self):
+        self.parameter_listener(12)
+    def parameter_13_listener(self):
+        self.parameter_listener(13)
+    def parameter_14_listener(self):
+        self.parameter_listener(14)
+    def parameter_15_listener(self):
+        self.parameter_listener(15)
+    def parameter_16_listener(self):
+        self.parameter_listener(16)
+
+
+    def parameter_listener(self, parameter_number):
+        self.logger.info(f"parameter_1_listener; selected device is {self.the_selected_device.name}")
+        param = self.the_selected_device.parameters[parameter_number]
+        self.touch_osc.send_message(f"/selected-device/parameter-update", [parameter_number, str(param.value), param.name, param.min, param.max])
+
+    def on_device_changed(self, new_device):
+        self.logger.info("selected_device_changed: " + str(new_device))
+        if new_device is None:
+            return
+
+        device = new_device
+        # device_name = selected_device_name(None)[0]
+        self.logger.info(f"selected_device_changed {new_device.name}")
+        self.touch_osc.send_message("/selected-device/name", new_device.name)
+
+
+        if self.the_selected_device is not None:
+            for i, param in enumerate(device.parameters):
+                if i < 17 and i > 0:
+                    listener = getattr(self, f"parameter_{i}_listener")
+                    self.logger.info(f"removing listener from {param.name}; is on: {param.value_has_listener(listener)}")
+                    if param.value_has_listener(listener):
+                        param.remove_value_listener(listener)
+
+        self.the_selected_device = device
+
+        for i, param in enumerate(device.parameters):
+            if i < 17 and i > 0:
+                listener = getattr(self, f"parameter_{i}_listener")
+                self.touch_osc.send_message(f"/selected-device/parameter-update", [i, str(param.value), param.name, param.min, param.max])
+                param.add_value_listener(listener)
+
+        self.touch_osc.send_message("/selected-device/parameter-update-complete", len(device.parameters))
+
+
     def init_api(self):
 
         logger = logging.getLogger("abletonosc")
+
+        def selected_device_changed():
+
+            self.on_device_changed(selected_device())
+
+        # def selected_device_changed():
+        #     self.logger.info("selected_device_changed")
+        #     device_name = selected_device_name(None)[0]
+        #     self.logger.info(f"selected_device_changed {device_name}")
+        #     self.touch_osc.send_message("/selected-device/name", device_name)
+        #
+        #     device = selected_device()
+        #
+        #     if self.the_selected_device is not None:
+        #         for i, param in enumerate(device.parameters):
+        #             if i == 1:
+        #                 if self.the_selected_device.parameters[1].value_has_listener(self.parameter_1_listener):
+        #                     self.the_selected_device.parameters[1].remove_value_listener(self.parameter_1_listener)
+        #
+        #     self.the_selected_device = device
+        #
+        #     for i, param in enumerate(device.parameters):
+        #         if i < 17:
+        #             self.touch_osc.send_message(f"/selected-device/parameter-update", [i, str(param.value), param.name, param.min, param.max])
+        #
+        #         if i == 1:
+        #             param.add_value_listener(partial(self.parameter_1_listener))
+        #
+        #     self.touch_osc.send_message("/selected-device/parameter-update-complete", len(device.parameters))
+
 
         def device_nav_first():
             NavDirection = Live.Application.Application.View.NavDirection
@@ -180,6 +331,7 @@ class CustomHandler(AbletonOSCHandler):
 
             ## for when it is selected but out of focus
             _scroll_selected_device_chain(NavDirection.left)
+            selected_device_changed()
 
         def device_nav_last():
             NavDirection = Live.Application.Application.View.NavDirection
@@ -189,6 +341,7 @@ class CustomHandler(AbletonOSCHandler):
                 _scroll_selected_device_chain(NavDirection.right)
 
                 if selected_device().name == "CK Utility":
+                    selected_device_changed()
                     return
 
         def scroll_to_device(params):
@@ -274,6 +427,8 @@ class CustomHandler(AbletonOSCHandler):
                 _scroll_selected_device_chain(NavDirection.left)
                 check += 1
 
+            selected_device_changed()
+
 
         def device_nav_right_ignoring_inner_devices(params):
             NavDirection = Live.Application.Application.View.NavDirection
@@ -292,6 +447,8 @@ class CustomHandler(AbletonOSCHandler):
                 _scroll_selected_device_chain(NavDirection.right)
                 check += 1
 
+            selected_device_changed()
+
         def replace_spaces(st):
             return st.replace(" ", "_")
 
@@ -302,12 +459,26 @@ class CustomHandler(AbletonOSCHandler):
             logger.info(f"selected_device_name dev = {replace_spaces(device.name)}")
             return (replace_spaces(device.name),)
 
+        def device_info(params):
+            device = selected_device()
+            if device is None:
+                return None
+            else:
+                logger.info(f"Values for {device.name} of type {device.class_name}")
+                for i, p in enumerate((device).parameters):
+                    logger.info(f" - [{i}] {p.name}:{p.value} ({p.min} -> {p.max} )")
+
+                return None
+
         def selected_device_type(params):
             return (replace_spaces(selected_device().class_display_name),)
 
         def selected_device_ob(params):
             d = selected_device()
-            return (d.name, d.class_display_name, d.type,)
+            if d is None:
+                return None
+            else:
+                return (d.name, d.class_display_name, d.type,)
 
         def selected_device():
             return self.song.view.selected_track.view.selected_device
@@ -317,6 +488,12 @@ class CustomHandler(AbletonOSCHandler):
             self.song.view.selected_track.color_index = int(params[0])
             return (current_index,)
 
+
+        def press_rack_random_button(self):
+            device = self.selected_device()
+
+            if device is not None and device.can_have_chains:
+                device.randomize_macros()
 
         def is_selected_device_an_instrument():
             return str(selected_device().type) == "instrument"
@@ -612,16 +789,30 @@ class CustomHandler(AbletonOSCHandler):
                     return i
             return False
 
+        def move_selected_track_to_track_with_prefix(param):
+            prefix = param
+
+            for i, track in enumerate(self.song.tracks):
+                if track.name.startswith(prefix):
+                    self.song.view.selected_track = track
+                    break
+
+            selected_device_changed()
+
         def track_nav_inc(param):
             all_tracks = len(self.song.tracks)
             selected_track = self.song.view.selected_track  # Get the currently selected track
 
             logger.info(f"Selected track name is {selected_track.name}")
+            next_index = 1
 
-            if selected_track.name == "Master":
-                self.manager.show_message("Can't increment from Master")
+            is_return_track = selected_track in self.song.return_tracks
+            is_main_track = selected_track == self.song.master_track
+            logger.info(f"is return track: {is_return_track}")
+            logger.info(f"is main track: {is_main_track}")
 
-            next_index = list(self.song.tracks).index(selected_track) + 1  # Get the index of the selected track
+            if not is_return_track and not is_main_track:
+                next_index = list(self.song.tracks).index(selected_track) + 1  # Get the index of the selected track
 
             if next_index < all_tracks:
                 self.song.view.selected_track = self.song.tracks[next_index]
@@ -629,12 +820,20 @@ class CustomHandler(AbletonOSCHandler):
             ### Do some events afterwards as we don't listen for events
             self.name_guesser.update_track_names()
 
+            selected_device_changed()
+
         def track_nav_dec(param):
             selected_track = self.song.view.selected_track  # Get the currently selected track
 
-            if selected_track.name == "Master":
-                next_index = len(list(self.song.tracks)) - 1
-            else:
+            logger.info(f"Selected track name is {selected_track.name}")
+            next_index = 1
+
+            is_return_track = selected_track in self.song.return_tracks
+            is_main_track = selected_track == self.song.master_track
+            logger.info(f"is return track: {is_return_track}")
+            logger.info(f"is main track: {is_main_track}")
+
+            if not is_return_track and not is_main_track:
                 next_index = list(self.song.tracks).index(selected_track) - 1  # Get the index of the selected track
 
             if next_index >= 0:
@@ -642,6 +841,8 @@ class CustomHandler(AbletonOSCHandler):
 
             ### Do some events afterwards as we don't listen for events
             self.name_guesser.update_track_names()
+
+            selected_device_changed()
 
         def _scroll_device_chain(direction):
             view = self.application.view
@@ -684,6 +885,11 @@ class CustomHandler(AbletonOSCHandler):
                             name = parts[1]
                             clip.name = f"{scene_number+1} {name} ({loop_length})"
 
+        def shift_clip_notes_right(params):
+            self.clip_ops.shift_clip_notes_right()
+
+        def shift_clip_notes_left(params):
+            self.clip_ops.shift_clip_notes_left()
 
         self.osc_server.add_handler("/live/custom/fire/scene", fire_scene)
         self.osc_server.add_handler("/live/custom/set/toggle_inst_utility", toggle_instrument_utility)
@@ -699,6 +905,7 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/view/nav/devices/next", device_nav_right_ignoring_inner_devices)
         self.osc_server.add_handler("/live/view/nav/tracks/inc", track_nav_inc)
         self.osc_server.add_handler("/live/view/nav/tracks/dec", track_nav_dec)
+        self.osc_server.add_handler("/live/view/nav/tracks/by_prefix", move_selected_track_to_track_with_prefix)
 
         self.osc_server.add_handler("/live/custom/toggle_dt990", toggle_device_called_DT990_PRO_on_master)
         self.osc_server.add_handler("/live/custom/master_dt990/status", master_device_DT990_PRO_status)
@@ -732,6 +939,10 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/custom/toggle_high_pass", toggle_high_pass_on_master)
 
         self.osc_server.add_handler("/live/custom/next_midi_pattern", iterate_perc_pattern)
+        self.osc_server.add_handler("/live/custom/press_rack_random_button", press_rack_random_button)
+        self.osc_server.add_handler("/live/custom/shift_clip_notes_right", shift_clip_notes_right)
+        self.osc_server.add_handler("/live/custom/shift_clip_notes_left", shift_clip_notes_left)
+        self.osc_server.add_handler("/live/custom/device_info", device_info)
 
         self.osc_server.add_handler("/live/view/message", show_message)
 
@@ -782,9 +993,9 @@ class NameGuesser(AbletonOSCHandler):
 
             if found_name is not None:
                 found_name = (found_name
-                    .removeprefix("CK ")
-                    .removeprefix("INST ")
-                    .removeprefix("AYNIL "))
+                              .removeprefix("CK ")
+                              .removeprefix("INST ")
+                              .removeprefix("AYNIL "))
 
                 return re.sub(r'[^a-zA-Z0-9]', '', found_name), colour
 
