@@ -789,13 +789,27 @@ class CustomHandler(AbletonOSCHandler):
                     return i
             return False
 
-        def move_selected_track_to_track_with_prefix(param):
-            prefix = param
+        def move_selected_track_to_track_with_prefix(params):
+            prefix = str(params[0])
+            logger.info(f"move_selected_track_to_track_with_prefix, prefix: {prefix}")
+
+            found = False
 
             for i, track in enumerate(self.song.tracks):
-                if track.name.startswith(prefix):
+                logger.info("  checking track: " + track.name)
+                if track.name.lower().startswith(prefix.lower()):
+                    found = True
                     self.song.view.selected_track = track
                     break
+                elif ' ' in track.name:
+                    logger.info("  checking track after first space: " + track.name.split(' ')[1])
+                    if track.name.split(' ')[1].lower() == prefix.lower():
+                        found = True
+                        self.song.view.selected_track = track
+                        break
+
+            if not found:
+                logger.info("  no track found with prefix")
 
             selected_device_changed()
 
@@ -803,7 +817,7 @@ class CustomHandler(AbletonOSCHandler):
             all_tracks = len(self.song.tracks)
             selected_track = self.song.view.selected_track  # Get the currently selected track
 
-            logger.info(f"Selected track name is {selected_track.name}")
+            logger.info(f"Selected track name is {selected_track.name}, tracks total: {all_tracks}, return tracks count: {len(self.song.return_tracks)}")
             next_index = 1
 
             is_return_track = selected_track in self.song.return_tracks
@@ -811,21 +825,34 @@ class CustomHandler(AbletonOSCHandler):
             logger.info(f"is return track: {is_return_track}")
             logger.info(f"is main track: {is_main_track}")
 
-            if not is_return_track and not is_main_track:
+            if is_main_track and len(self.song.tracks) > 0:
+                self.song.view.selected_track = self.song.tracks[0]
+            elif not is_return_track:
                 next_index = list(self.song.tracks).index(selected_track) + 1  # Get the index of the selected track
+                logger.info(f"not_return, next_index: {next_index}, len: {len(self.song.return_tracks)}")
 
-            if next_index < all_tracks:
-                self.song.view.selected_track = self.song.tracks[next_index]
+                if next_index < all_tracks:
+                    self.song.view.selected_track = self.song.tracks[next_index]
+                elif next_index == all_tracks and len(self.song.return_tracks) > 0:
+                    self.song.view.selected_track = self.song.return_tracks[0]
+            elif is_return_track:
+                next_index = list(self.song.return_tracks).index(selected_track) + 1  # Get the index of the selected track
+                logger.info(f"is_return, track name is: {selected_track.name}")
+                logger.info(f"is_return, track index is: {list(self.song.return_tracks).index(selected_track)}")
+                logger.info(f"is_return, next_index: {next_index}, len: {len(self.song.return_tracks)}")
+                if next_index < len(self.song.return_tracks):
+                    self.song.view.selected_track = self.song.return_tracks[next_index]
+                elif next_index == len(self.song.return_tracks):
+                    self.song.view.selected_track = self.song.master_track
 
-            ### Do some events afterwards as we don't listen for events
-            self.name_guesser.update_track_names()
 
             selected_device_changed()
 
         def track_nav_dec(param):
+            all_tracks = len(self.song.tracks)
             selected_track = self.song.view.selected_track  # Get the currently selected track
 
-            logger.info(f"Selected track name is {selected_track.name}")
+            logger.info(f"Selected track name is {selected_track.name}, tracks total: {all_tracks}, return tracks count: {len(self.song.return_tracks)}")
             next_index = 1
 
             is_return_track = selected_track in self.song.return_tracks
@@ -833,14 +860,28 @@ class CustomHandler(AbletonOSCHandler):
             logger.info(f"is return track: {is_return_track}")
             logger.info(f"is main track: {is_main_track}")
 
-            if not is_return_track and not is_main_track:
+            if is_main_track and len(self.song.tracks) > 0:
+                if len(self.song.return_tracks) > 0:
+                    self.song.view.selected_track = self.song.return_tracks[-1]
+                else:
+                    self.song.view.selected_track = self.song.tracks[-1]
+            elif not is_return_track:
                 next_index = list(self.song.tracks).index(selected_track) - 1  # Get the index of the selected track
+                logger.info(f"not_return, next_index: {next_index}, len: {len(self.song.return_tracks)}")
 
-            if next_index >= 0:
-                self.song.view.selected_track = self.song.tracks[next_index]
-
-            ### Do some events afterwards as we don't listen for events
-            self.name_guesser.update_track_names()
+                if next_index >= 0:
+                    self.song.view.selected_track = self.song.tracks[next_index]
+                elif next_index < 0:
+                    self.song.view.selected_track = self.song.master_track
+            elif is_return_track:
+                next_index = list(self.song.return_tracks).index(selected_track) - 1  # Get the index of the selected track
+                logger.info(f"is_return, track name is: {selected_track.name}")
+                logger.info(f"is_return, track index is: {list(self.song.return_tracks).index(selected_track)}")
+                logger.info(f"is_return, next_index: {next_index}, len: {len(self.song.return_tracks)}")
+                if next_index >= 0:
+                    self.song.view.selected_track = self.song.return_tracks[next_index]
+                elif next_index < 0:
+                    self.song.view.selected_track = self.song.tracks[-1]
 
             selected_device_changed()
 
