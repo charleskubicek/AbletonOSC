@@ -1,3 +1,4 @@
+import dataclasses
 from functools import partial
 from _Framework.ControlSurfaceComponent import ControlSurfaceComponent
 from _Framework.ControlSurface import ControlSurface
@@ -483,6 +484,73 @@ class CustomHandler(AbletonOSCHandler):
         def selected_device():
             return self.song.view.selected_track.view.selected_device
 
+        @dataclasses.dataclass
+        class OnOff:
+            name: str
+
+            def action(self, p):
+                p.value = 0.0
+                p.value = 1.0
+
+            def __str__(self):
+                return f"OnOff({self.name})"
+
+
+        @dataclasses.dataclass
+        class Inc:
+            name: str
+
+            def action(self, p):
+                p.value = p.value + 1.0
+
+            def __str__(self):
+                return f"Inc({self.name})"
+
+        @dataclasses.dataclass
+        class Dec:
+            name: str
+
+            def action(self, p):
+                p.value = p.value - 1.0
+
+            def __str__(self):
+                return f"Dec({self.name})"
+
+        parameter_toggle_mappings = {
+            "SQ Sequencer" : [OnOff("RandPitch"),
+                              OnOff("RandOct"),
+                              OnOff("VelRandom"),
+                              OnOff("RandLength"),
+                              OnOff("ResetVelocity"),
+                              OnOff("ResetLength"),
+                              Dec("SQMax"),
+                              Inc("SQMax"),
+                              OnOff("ShiftLeft"),
+                              OnOff("ShiftRight"),
+                              ]
+        }
+
+
+        def selected_device_parameter_toggle(params):
+            device = selected_device()
+
+            if device is None or device.name not in parameter_toggle_mappings:
+                return ()
+
+            parameter_mapping_index = int(params[0])
+            # logger.info(f"selected_device_parameter_toggle dev = {parameter_mapping_index}")
+            parameter_op = parameter_toggle_mappings[device.name][parameter_mapping_index]
+            logger.info(f"selected_device_parameter_toggle device {device.name}:{parameter_op} from index {parameter_mapping_index}]")
+
+            show_message(f"Parameter {parameter_op}")
+
+            for p in device.parameters:
+                # logger.info(f"selected_device_parameter_toggle checking param {p.name} against {parameter_op} ({p.name == parameter_op})")
+                if p.name == parameter_op.name:
+                    parameter_op.action(p)
+
+            return None
+
         def track_color_to_red(params):
             current_index = self.song.view.selected_track.color_index
             self.song.view.selected_track.color_index = int(params[0])
@@ -552,9 +620,13 @@ class CustomHandler(AbletonOSCHandler):
                 return
 
         def show_message(params):
+            if type(params) is str:
+                message = params
+            else:
+                message = str(params[0])
             # self.log_message(f"show_message")
             # self.manager.show_message(f"TEST")
-            self.manager.show_message(f"{params[0]}")
+            self.manager.show_message(message)
             # self.manager.show_message(f"TEST")
             return (1, 1)
 
@@ -947,6 +1019,8 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/view/nav/tracks/inc", track_nav_inc)
         self.osc_server.add_handler("/live/view/nav/tracks/dec", track_nav_dec)
         self.osc_server.add_handler("/live/view/nav/tracks/by_prefix", move_selected_track_to_track_with_prefix)
+
+        self.osc_server.add_handler("/live/device/selected/parameter_toggle", selected_device_parameter_toggle)
 
         self.osc_server.add_handler("/live/custom/toggle_dt990", toggle_device_called_DT990_PRO_on_master)
         self.osc_server.add_handler("/live/custom/master_dt990/status", master_device_DT990_PRO_status)
