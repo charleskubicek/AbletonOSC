@@ -493,7 +493,7 @@ class CustomHandler(AbletonOSCHandler):
                 p.value = 1.0
 
             def __str__(self):
-                return f"OnOff({self.name})"
+                return f"Click {self.name}"
 
 
         @dataclasses.dataclass
@@ -504,7 +504,7 @@ class CustomHandler(AbletonOSCHandler):
                 p.value = p.value + 1.0
 
             def __str__(self):
-                return f"Inc({self.name})"
+                return f"Increment {self.name}"
 
         @dataclasses.dataclass
         class Dec:
@@ -514,7 +514,7 @@ class CustomHandler(AbletonOSCHandler):
                 p.value = p.value - 1.0
 
             def __str__(self):
-                return f"Dec({self.name})"
+                return f"Decrement {self.name}"
 
         parameter_toggle_mappings = {
             "SQ Sequencer" : [OnOff("RandPitch"),
@@ -542,7 +542,7 @@ class CustomHandler(AbletonOSCHandler):
             parameter_op = parameter_toggle_mappings[device.name][parameter_mapping_index]
             logger.info(f"selected_device_parameter_toggle device {device.name}:{parameter_op} from index {parameter_mapping_index}]")
 
-            show_message(f"Parameter {parameter_op}")
+            show_message(f"Parameter operation - {parameter_op}")
 
             for p in device.parameters:
                 # logger.info(f"selected_device_parameter_toggle checking param {p.name} against {parameter_op} ({p.name == parameter_op})")
@@ -748,11 +748,18 @@ class CustomHandler(AbletonOSCHandler):
 
             return None
 
+        def master_device_bass_only_toggle(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Bass Only":
+                    d.parameters[0].value = (d.parameters[0].value + 1) % 2
+
+                    self.manager.show_message(f"Bass Only set to {d.parameters[0].value}")
 
         def master_device_bass_only_on(params):
             return set_master_chanel_device_to("Bass Only", 1.0)
 
             return 0.0,
+
         def master_device_bass_only_off(params):
             return set_master_chanel_device_to("Bass Only", 0.0)
 
@@ -764,6 +771,12 @@ class CustomHandler(AbletonOSCHandler):
 
             return None
 
+        def master_device_bass_cut_toggle(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Bass Cut":
+                    d.parameters[0].value = (d.parameters[0].value + 1) % 2
+
+                    self.manager.show_message(f"Bass Cut set to {d.parameters[0].value}")
 
         def master_device_bass_cut_on(params):
             return set_master_chanel_device_to("Bass Cut", 1.0)
@@ -772,6 +785,12 @@ class CustomHandler(AbletonOSCHandler):
         def master_device_bass_cut_off(params):
             return set_master_chanel_device_to("Bass Cut", 0.0)
 
+        def master_device_mono_toggle(params):
+            for d in self.song.master_track.devices:
+                if d.name == "Mono":
+                    d.parameters[0].value = (d.parameters[0].value + 1) % 2
+
+                    self.manager.show_message(f"Mono set to {d.parameters[0].value}")
 
         def master_device_mono_status(params):
             for d in self.song.master_track.devices:
@@ -1036,6 +1055,7 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/custom/master_ref_track/on", master_device_ref_track_on)
         self.osc_server.add_handler("/live/custom/master_ref_track/off", master_device_ref_track_off)
 
+        self.osc_server.add_handler("/live/custom/master_mono/toggle", master_device_mono_toggle)
         self.osc_server.add_handler("/live/custom/master_mono/status", master_device_mono_status)
         self.osc_server.add_handler("/live/custom/master_mono/on", master_device_mono_on)
         self.osc_server.add_handler("/live/custom/master_mono/off", master_device_mono_off)
@@ -1043,10 +1063,12 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/custom/master_bass_only/status", master_device_bass_only_status)
         self.osc_server.add_handler("/live/custom/master_bass_only/on", master_device_bass_only_on)
         self.osc_server.add_handler("/live/custom/master_bass_only/off", master_device_bass_only_off)
+        self.osc_server.add_handler("/live/custom/master_bass_only/toggle", master_device_bass_only_toggle)
 
         self.osc_server.add_handler("/live/custom/master_bass_cut/status", master_device_bass_cut_status)
         self.osc_server.add_handler("/live/custom/master_bass_cut/on", master_device_bass_cut_on)
         self.osc_server.add_handler("/live/custom/master_bass_cut/off", master_device_bass_cut_off)
+        self.osc_server.add_handler("/live/custom/master_bass_cut/toggle", master_device_bass_cut_toggle)
 
         self.osc_server.add_handler("/live/custom/toggle_metric_ab", toggle_metric_ab_on_master)
         # self.osc_server.add_handler("/live/custom/toggle_mono", toggle_mono_on_master)
