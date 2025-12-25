@@ -105,6 +105,35 @@ class ClipOps(AbletonOSCHandler):
             clip.apply_note_modifications(notes)
 
 
+    def duplicate_notes_in_clip(self):
+        clip = self.get_or_create_selected_clip(-1, create=False, remove_existing=False)
+        if clip is not None:
+            notes = clip.get_all_notes_extended()
+            new_notes = []
+            for note in notes:
+                new_note = Live.Clip.MidiNoteSpecification(pitch=note.pitch,
+                                                          start_time=note.start_time + clip.loop_end,
+                                                          duration=note.duration,
+                                                          velocity=note.velocity)
+                new_notes.append(new_note)
+
+            clip.add_new_notes(tuple(new_notes))
+
+    def add_one_bar_to_start_of_clip(self):
+        clip = self.get_or_create_selected_clip(-1, create=False, remove_existing=False)
+        if clip is not None:
+            notes = clip.get_all_notes_extended()
+            new_notes = []
+            for note in notes:
+                note.start_time = note.start_time + 1.0
+                # new_notes.append(note)
+
+            clip.loop_end = clip.loop_end + 1.0
+            clip.apply_note_modifications(notes)
+
+            # clip.add_new_notes(tuple(new_notes))
+            # clip.deselect_all_notes()
+
 class PatternCycler(AbletonOSCHandler):
     def __init__(self, ins, patterns, clip_ops):
         super().__init__(ins)
@@ -170,6 +199,7 @@ class Patterns(object):
     ]
 
     basic_midi_cycles = [
+        ('-', []),
         ('C Line', c_line),
         ('C Beats', notes_c_kicks),
         ('C Offbeat', notes_off_beat),
@@ -497,6 +527,18 @@ class CustomHandler(AbletonOSCHandler):
 
 
         @dataclasses.dataclass
+        class RackTurn:
+            name: str
+
+            def action(self, p):
+                p.value = 0.0
+                p.value = 70
+
+            def __str__(self):
+                return f"Click {self.name}"
+
+
+        @dataclasses.dataclass
         class Inc:
             name: str
 
@@ -527,25 +569,37 @@ class CustomHandler(AbletonOSCHandler):
                               Inc("SQMax"),
                               OnOff("ShiftLeft"),
                               OnOff("ShiftRight"),
-                              ]
+                              ],
+            "SHED SKIN - LOW END GENERATOR RACK": [
+                RackTurn("NEW GROOVE")
+            ],
+            "INST - Diva Preset Rack - CK": [
+                Dec("Program Change"),
+                Inc("Program Change"),
+                Dec("Bank (MSB)"),
+                Inc("Bank (MSB)")
+            ]
         }
+
 
 
         def selected_device_parameter_toggle(params):
             device = selected_device()
 
+            logger.info("is {device.name} in parameter_toggle_mappings: " + str(device.name in parameter_toggle_mappings))
+
             if device is None or device.name not in parameter_toggle_mappings:
                 return ()
 
             parameter_mapping_index = int(params[0])
-            # logger.info(f"selected_device_parameter_toggle dev = {parameter_mapping_index}")
+            logger.info(f"selected_device_parameter_toggle dev = {parameter_mapping_index}")
             parameter_op = parameter_toggle_mappings[device.name][parameter_mapping_index]
             logger.info(f"selected_device_parameter_toggle device {device.name}:{parameter_op} from index {parameter_mapping_index}]")
 
             show_message(f"Parameter operation - {parameter_op}")
 
             for p in device.parameters:
-                # logger.info(f"selected_device_parameter_toggle checking param {p.name} against {parameter_op} ({p.name == parameter_op})")
+                logger.info(f"selected_device_parameter_toggle checking param '{p.name}' against '{parameter_op.name}' ({p.name == parameter_op.name})")
                 if p.name == parameter_op.name:
                     parameter_op.action(p)
 
@@ -557,8 +611,8 @@ class CustomHandler(AbletonOSCHandler):
             return (current_index,)
 
 
-        def press_rack_random_button(self):
-            device = self.selected_device()
+        def press_rack_random_button(params):
+            device = selected_device()
 
             if device is not None and device.can_have_chains:
                 device.randomize_macros()
@@ -939,6 +993,16 @@ class CustomHandler(AbletonOSCHandler):
 
             selected_device_changed()
 
+        def track_nav_to_first(param):
+            all_tracks = len(self.song.tracks)
+
+            logger.info(f"track_nav_to_first, total tracks: {all_tracks}")
+
+            if all_tracks > 0:
+                self.song.view.selected_track = self.song.tracks[0]
+
+            selected_device_changed()
+
         def track_nav_dec(param):
             all_tracks = len(self.song.tracks)
             selected_track = self.song.view.selected_track  # Get the currently selected track
@@ -996,6 +1060,12 @@ class CustomHandler(AbletonOSCHandler):
         def update_track_names(params):
             self.name_guesser.update_track_names()
 
+        def duplicate_clip_notes(params):
+            self.clip_ops.duplicate_notes_in_clip()
+
+        def add_one_bar_to_start_of_clip(params):
+            self.clip_ops.add_one_bar_to_start_of_clip()
+
         def name_clips_to_scene_number_and_clip_length(params):
             for track in self.song.tracks:  # for each track
                 for clip_slot in track.clip_slots:  # for each clip slot
@@ -1037,6 +1107,7 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/view/nav/devices/next", device_nav_right_ignoring_inner_devices)
         self.osc_server.add_handler("/live/view/nav/tracks/inc", track_nav_inc)
         self.osc_server.add_handler("/live/view/nav/tracks/dec", track_nav_dec)
+        self.osc_server.add_handler("/live/view/nav/tracks/first", track_nav_to_first)
         self.osc_server.add_handler("/live/view/nav/tracks/by_prefix", move_selected_track_to_track_with_prefix)
 
         self.osc_server.add_handler("/live/device/selected/parameter_toggle", selected_device_parameter_toggle)
@@ -1079,6 +1150,8 @@ class CustomHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/custom/press_rack_random_button", press_rack_random_button)
         self.osc_server.add_handler("/live/custom/shift_clip_notes_right", shift_clip_notes_right)
         self.osc_server.add_handler("/live/custom/shift_clip_notes_left", shift_clip_notes_left)
+        self.osc_server.add_handler("/live/custom/duplicate_clip_notes", duplicate_clip_notes)
+        self.osc_server.add_handler("/live/custom/add_one_bar_to_start_of_clip", add_one_bar_to_start_of_clip)
         self.osc_server.add_handler("/live/custom/device_info", device_info)
 
         self.osc_server.add_handler("/live/view/message", show_message)
